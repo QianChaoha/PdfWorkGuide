@@ -25,4 +25,8 @@ dependencies {
     implementation rootProject.ext.dependencies["support-v4"]
     implementation rootProject.ext.dependencies["okhttp"]
     implementation rootProject.ext.dependencies["design"]
+    //RxJava
+    implementation 'io.reactivex:rxjava:1.3.0'
+    implementation 'net.gotev:uploadservice:3.4.2'
+
 }
