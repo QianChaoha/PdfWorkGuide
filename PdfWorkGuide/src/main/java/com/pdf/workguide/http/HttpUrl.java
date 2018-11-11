@@ -8,8 +8,16 @@ package com.pdf.workguide.http;
  */
 
 public class HttpUrl {
-    public static final String SERVER_URL = "http://13.230.25.84:8080";
+    public static final String SERVER_URL = "http://101.200.50.2:8035/";
 
     public static final String LOGIN = "Api/Login";
     public static final String GET_POSITION_IP = "Api/GetPositionInfo";
+    //工位不良数
+    public static final String GET_POSITION_BAD_NUMBER = "Api/GetPositionBadNumber";
+    //工位不良类别信息列表
+    public static final String GET_POSITION_BAD_INFO = "Api/GetPositionBadInfo";
+    //添加工位不良
+    public static final String GET_POSITION_BAD = "Api/AddPositionBad";
+    //终端操作Sop文件列表
+    public static final String GET_TERMINAL_FILE_LIST = "Api/GetTerminalPositionFileList";
 }

@@ -9,6 +9,8 @@ import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.TextView;
 
+import com.pdf.workguide.util.LoaddingLayoutUtils;
+
 
 /**
  * Created by cqian on 2018/6/7.
@@ -21,6 +23,7 @@ public abstract class BaseActivity extends FragmentActivity {
     //标记APP是否从后台再次进入的flag
     static boolean isFromBackground = false;
     static long mLastTime = -1;
+    protected LoaddingLayoutUtils mLoaddingLayoutUtils;
 
     @SuppressLint("ResourceType")
     @Override
@@ -33,6 +36,7 @@ public abstract class BaseActivity extends FragmentActivity {
         mLayoutView = View.inflate(this, getLayoutId(), null);
 
         setContentView(mLayoutView);
+        mLoaddingLayoutUtils=new LoaddingLayoutUtils(mActivity);
         initView();
         initData();
     }
