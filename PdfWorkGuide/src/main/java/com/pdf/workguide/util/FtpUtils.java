@@ -32,9 +32,6 @@ public class FtpUtils {
         ftpClient = new FTPClient();
     }
 
-    /*
-     * 得到类对象实例（因为只能有一个这样的类对象，所以用单例模式）
-     */
     public static FtpUtils getInstance() {
         if (ftpUtilsInstance == null) {
             ftpUtilsInstance = new FtpUtils();
@@ -63,8 +60,11 @@ public class FtpUtils {
             //1.要连接的FTP服务器Url,Port
             ftpClient.connect(FTPUrl, FTPPort);
 
+            ftpClient.setControlEncoding("GB2312");
             //2.登陆FTP服务器
             ftpClient.login(UserName, UserPassword);
+
+            ftpClient.setFileType(FTPClient.BINARY_FILE_TYPE);
 
             //3.看返回的值是不是230，如果是，表示登陆成功
             reply = ftpClient.getReplyCode();
@@ -137,11 +137,12 @@ public class FtpUtils {
     /**
      * 下载文件
      *
-     * @param FilePath 要存放的文件的路径
-     * @param FileName 远程FTP服务器上的那个文件的名字
+     * @param remotePath  远程FTP服务器上的那个文件所在路径
+     * @param filePath 要存放的文件的路径
+     * @param fileName 远程FTP服务器上的那个文件的名字
      * @return true为成功，false为失败
      */
-    public boolean downLoadFile(String remotePath, String FilePath, String FileName) {
+    public boolean downLoadFile(String remotePath, String filePath, String fileName) {
 
         if (!ftpClient.isConnected()) {
             if (!initFTPSetting(FTPUrl, FTPPort, UserName, UserPassword)) {
@@ -158,32 +159,43 @@ public class FtpUtils {
 
             // 遍历所有文件，找到指定的文件
             for (FTPFile file : files) {
-                if (file.getName().equals(FileName)) {
+                String name = file.getName();
+                if (name.equals(fileName)) {
                     //根据绝对路径初始化文件
-                    File localFile = new File(FilePath);
+                    File localFile = new File(filePath);
 
                     // 输出流
                     OutputStream outputStream = new FileOutputStream(localFile);
 
                     // 下载文件
-                    ftpClient.retrieveFile(file.getName(), outputStream);
+                    ftpClient.retrieveFile(new String(name.getBytes("GB2312"),"ISO-8859-1"), outputStream);
 
                     //关闭流
                     outputStream.close();
                 }
             }
 
-            //退出登陆FTP，关闭ftpCLient的连接
-            ftpClient.logout();
-            ftpClient.disconnect();
-
-
         } catch (IOException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
+        } catch (Exception e) {
+            System.out.println("----------------------");
+            System.out.println(e.getMessage());
         }
 
         return true;
+    }
+
+    public void close() {
+        //退出登陆FTP，关闭ftpCLient的连接
+        if (ftpClient == null) return;
+        try {
+            ftpClient.logout();
+            ftpClient.disconnect();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
 }

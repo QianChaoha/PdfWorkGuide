@@ -22,6 +22,7 @@ import com.pdf.workguide.http.CallBack;
 import com.pdf.workguide.http.HttpUrl;
 import com.pdf.workguide.http.HttpUtils;
 import com.pdf.workguide.util.ErrorLogUtils;
+import com.pdf.workguide.util.FileUtils;
 import com.pdf.workguide.util.FtpUtils;
 import com.pdf.workguide.view.dialog.ListDialog;
 import com.tamic.novate.Throwable;
@@ -29,8 +30,11 @@ import com.tamic.novate.Throwable;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+
+import static com.pdf.workguide.http.HttpUrl.FILE_SERVER_URL;
 
 public class MainActivity extends BaseActivity {
     RecyclerView mRecycleViewLeft, mRecycleViewRight;
@@ -122,7 +126,7 @@ public class MainActivity extends BaseActivity {
         //        String downUrl = "ftp://FtpUser:lin_123456@101.200.50.2/192.168.1.222/zuoye.pdf";
 
         FtpUtils ftpUtils = FtpUtils.getInstance();
-        boolean flag = ftpUtils.initFTPSetting("101.200.50.2", 21, "FtpUser", "lin_123456");
+        boolean flag = ftpUtils.initFTPSetting(FILE_SERVER_URL, 26, "FtpUser", "lin_123456");
 
     }
 
@@ -131,20 +135,7 @@ public class MainActivity extends BaseActivity {
     }
 
     public void getPdf() {
-//        new Thread() {
-//            @Override
-//            public void run() {
 
-
-//                String downUrl = "101.200.50.2";
-//                FtpUtils.downFile(downUrl, 21, "FtpUser", "lin_123456", "AllFile", "11.jpg", Environment.getExternalStorageDirectory().getPath());
-
-
-//                FtpUtils.getInstance().downLoadFile("/AllFile", Environment.getExternalStorageDirectory().getPath() + "/11.jpg", "11.jpg");
-//
-//
-//            }
-//        }.start();
         JSONObject jsonObject = new JSONObject();
         try {
             jsonObject.put("PositionIp", mIp);
@@ -153,25 +144,75 @@ public class MainActivity extends BaseActivity {
         }
         HttpUtils.doPost(HttpUrl.GET_TERMINAL_FILE_LIST, jsonObject, new CallBack<TermialFileListBean>() {
             @Override
-            public void onSuccess(TermialFileListBean data) {
+            public void onSuccess(final TermialFileListBean data) {
                 if (data != null && data.data != null && data.data.size() > 0) {
-                    for (int i = 0; i < data.data.size(); i++) {
-                        TermialFileListBean.DataBean dataBean = data.data.get(i);
-                        if (dataBean != null && !TextUtils.isEmpty(dataBean.FileIssuedPositionUrl)) {
-                            String fileName = dataBean.FileIssuedPositionUrl;
-
-                            if (fileName.contains("\\")) {
-                                int index = fileName.lastIndexOf("\\");
-                                if (index > 0) {
-                                    fileName = fileName.substring(index + 1, fileName.length());
+                    new Thread() {
+                        @Override
+                        public void run() {
+                            for (int i = 0; i < data.data.size(); i++) {
+                                TermialFileListBean.DataBean dataBean = data.data.get(i);
+                                if (dataBean != null && !TextUtils.isEmpty(dataBean.FileIssuedPositionUrl)) {
+                                    String fileName = dataBean.FileIssuedPositionUrl;
+                                    String remotePath = "";
+                                    if (fileName.contains("\\")) {
+                                        int index = fileName.lastIndexOf("\\");
+                                        if (index > 0) {
+                                            remotePath = fileName.substring(0, index);
+                                            fileName = fileName.substring(index + 1, fileName.length());
+                                        }
+                                    }
+                                    operateFile(dataBean, remotePath, fileName);
                                 }
                             }
-
-                            //缓存此文件或者删除此文件
-
                         }
+                    }.start();
+
+                }
+            }
+
+            @Override
+            public void onFailed(Throwable e) {
+
+            }
+        });
+    }
+
+    private void operateFile(TermialFileListBean.DataBean dataBean, final String remotePath, final String fileName) {
+        if (dataBean.ClientIsDownload) {
+            if (dataBean.IsDeleted) {
+                //从缓存中删除
+                if (FileUtils.fileExist(mActivity, fileName)) {
+                    if (FileUtils.deletefile(mActivity, fileName)) {
+                        terminalPositionFileEdit(dataBean.PositionFileId);
                     }
                 }
+            } else {
+                //重新下载到缓存
+                File dir = FileUtils.getCacheDir(mActivity);// 获取缓存所在的文件夹
+                File file = new File(dir, fileName);
+                System.out.println("remotePath  " + remotePath);
+                System.out.println("fileName  " + fileName);
+                // remotePath   "/AllFile"
+                ///storage/emulated/0/Android/data/com.pdf.workguide/cache/Dingan/JMeter相关的问题（整理）.docx
+                FtpUtils.getInstance().downLoadFile(remotePath, file.getAbsolutePath().toString(), fileName);
+
+
+            }
+        }
+
+    }
+
+    private void terminalPositionFileEdit(int positionFileId) {
+        JSONObject jsonObject = new JSONObject();
+        try {
+            jsonObject.put("PositionFileId", positionFileId);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        HttpUtils.doPost(HttpUrl.TERMINAL_FILE_EDIT, jsonObject, new CallBack() {
+            @Override
+            public void onSuccess(Object data) {
+
             }
 
             @Override
@@ -334,5 +375,11 @@ public class MainActivity extends BaseActivity {
                 }
             });
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        FtpUtils.getInstance().close();
     }
 }
