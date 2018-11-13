@@ -12,7 +12,7 @@ public class HttpUrl {
     public static final String FILE_SERVER_URL = "101.200.50.2";
 
     public static final String LOGIN = "Api/Login";
-    public static final String GET_POSITION_IP = "Api/GetPositionInfo";
+    public static final String GET_POSITION_INFO = "Api/GetPositionInfo";
     //工位不良数
     public static final String GET_POSITION_BAD_NUMBER = "Api/GetPositionBadNumber";
     //工位不良类别信息列表

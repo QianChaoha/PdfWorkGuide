@@ -137,9 +137,9 @@ public class FtpUtils {
     /**
      * 下载文件
      *
-     * @param remotePath  远程FTP服务器上的那个文件所在路径
-     * @param filePath 要存放的文件的路径
-     * @param fileName 远程FTP服务器上的那个文件的名字
+     * @param remotePath 远程FTP服务器上的那个文件所在路径
+     * @param filePath   要存放的文件的路径
+     * @param fileName   远程FTP服务器上的那个文件的名字
      * @return true为成功，false为失败
      */
     public boolean downLoadFile(String remotePath, String filePath, String fileName) {
@@ -168,12 +168,14 @@ public class FtpUtils {
                     OutputStream outputStream = new FileOutputStream(localFile);
 
                     // 下载文件
-                    ftpClient.retrieveFile(new String(name.getBytes("GB2312"),"ISO-8859-1"), outputStream);
+                    ftpClient.retrieveFile(new String(name.getBytes("GB2312"), "ISO-8859-1"), outputStream);
 
                     //关闭流
                     outputStream.close();
                 }
             }
+            return true;
+
 
         } catch (IOException e) {
             // TODO Auto-generated catch block
@@ -183,7 +185,7 @@ public class FtpUtils {
             System.out.println(e.getMessage());
         }
 
-        return true;
+        return false;
     }
 
     public void close() {

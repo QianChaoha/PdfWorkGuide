@@ -1,7 +1,8 @@
 package com.pdf.workguide.activity;
 
 import android.graphics.Color;
-import android.os.Environment;
+import android.os.Handler;
+import android.os.Message;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
@@ -11,10 +12,13 @@ import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import com.github.barteksc.pdfviewer.PDFView;
 import com.pdf.workguide.R;
 import com.pdf.workguide.adapter.HomeAdapter;
 import com.pdf.workguide.base.BaseActivity;
+import com.pdf.workguide.base.BaseBean;
 import com.pdf.workguide.base.BaseDialogInterface;
+import com.pdf.workguide.bean.BadPositionBean;
 import com.pdf.workguide.bean.PositionBadInfoBean;
 import com.pdf.workguide.bean.PositionInfoBean;
 import com.pdf.workguide.bean.TermialFileListBean;
@@ -49,9 +53,35 @@ public class MainActivity extends BaseActivity {
     private HomeAdapter mHomeRightAdapter;
     ListDialog mListDialog;
     private PositionInfoBean.DataBean.TerminalInfoBean mData;
+    private static final int BAD_NUM = 1;//不良数
+    private static final int GET_FILE_LIST = 2;//文件列表
+    private static final int POST_DELAY = 500;
+    Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case BAD_NUM:
+                    getBadNum();
+                    break;
+                case GET_FILE_LIST:
+                    getPdf();
+                    break;
+            }
+        }
+    };
+    private int mProductDetailId;
+    private String mDisplayFile;//需要展示出来的文件名
+    PDFView mPDFView;
+
+    @Override
+    protected int getLayoutId() {
+        return R.layout.activity_main;
+    }
 
     @Override
     protected void initView() {
+        mPDFView = findViewById(R.id.pdfView);
+
         mRecycleViewLeft = findViewById(R.id.recycleViewLeft);
         mRecycleViewLeft.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false));
 
@@ -71,6 +101,7 @@ public class MainActivity extends BaseActivity {
                         jsonObject.put("ProductDetailId", mData.ProductDetailId);
                     }
                     jsonObject.put("ProcessErrorId", dataBean.Id);
+                    jsonObject.put("LoginName", mUserName);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -123,14 +154,8 @@ public class MainActivity extends BaseActivity {
     }
 
     public void InitFTPServerSetting() {
-        //        String downUrl = "ftp://FtpUser:lin_123456@101.200.50.2/192.168.1.222/zuoye.pdf";
-
         FtpUtils ftpUtils = FtpUtils.getInstance();
-        boolean flag = ftpUtils.initFTPSetting(FILE_SERVER_URL, 26, "FtpUser", "lin_123456");
-
-    }
-
-    public void click(View view) {
+        ftpUtils.initFTPSetting(FILE_SERVER_URL, 26, "FtpUser", "lin_123456");
 
     }
 
@@ -145,10 +170,10 @@ public class MainActivity extends BaseActivity {
         HttpUtils.doPost(HttpUrl.GET_TERMINAL_FILE_LIST, jsonObject, new CallBack<TermialFileListBean>() {
             @Override
             public void onSuccess(final TermialFileListBean data) {
-                if (data != null && data.data != null && data.data.size() > 0) {
-                    new Thread() {
-                        @Override
-                        public void run() {
+                new Thread() {
+                    @Override
+                    public void run() {
+                        if (data != null && data.data != null && data.data.size() > 0) {
                             for (int i = 0; i < data.data.size(); i++) {
                                 TermialFileListBean.DataBean dataBean = data.data.get(i);
                                 if (dataBean != null && !TextUtils.isEmpty(dataBean.FileIssuedPositionUrl)) {
@@ -165,14 +190,15 @@ public class MainActivity extends BaseActivity {
                                 }
                             }
                         }
-                    }.start();
+                        mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
+                    }
+                }.start();
 
-                }
             }
 
             @Override
             public void onFailed(Throwable e) {
-
+                mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
             }
         });
     }
@@ -194,9 +220,12 @@ public class MainActivity extends BaseActivity {
                 System.out.println("fileName  " + fileName);
                 // remotePath   "/AllFile"
                 ///storage/emulated/0/Android/data/com.pdf.workguide/cache/Dingan/JMeter相关的问题（整理）.docx
-                FtpUtils.getInstance().downLoadFile(remotePath, file.getAbsolutePath().toString(), fileName);
-
-
+                if (FtpUtils.getInstance().downLoadFile(remotePath, file.getAbsolutePath().toString(), fileName) && file.exists()) {
+                    if (fileName != null && fileName.equals(mDisplayFile)) {
+                        showPdf();
+                    }
+                    terminalPositionFileEdit(dataBean.PositionFileId);
+                }
             }
         }
 
@@ -209,9 +238,9 @@ public class MainActivity extends BaseActivity {
         } catch (JSONException e) {
             e.printStackTrace();
         }
-        HttpUtils.doPost(HttpUrl.TERMINAL_FILE_EDIT, jsonObject, new CallBack() {
+        HttpUtils.doPost(HttpUrl.TERMINAL_FILE_EDIT, jsonObject, new CallBack<BaseBean>() {
             @Override
-            public void onSuccess(Object data) {
+            public void onSuccess(BaseBean data) {
 
             }
 
@@ -235,13 +264,23 @@ public class MainActivity extends BaseActivity {
             e.printStackTrace();
         }
 
-        HttpUtils.doPost(HttpUrl.GET_POSITION_IP, jsonObject, new CallBack<PositionInfoBean>() {
+        HttpUtils.doPost(HttpUrl.GET_POSITION_INFO, jsonObject, new CallBack<PositionInfoBean>() {
             @Override
             public void onSuccess(PositionInfoBean data) {
                 mLoaddingLayoutUtils.dismiss();
                 if (data != null && data.data != null) {
                     if (data.data.terminalInfo != null) {
                         setRightData(data.data.terminalInfo);
+
+                        mDisplayFile = data.data.terminalInfo.FileIssuedPositionUrl;
+                        if (mDisplayFile != null && mDisplayFile.contains("\\")) {
+                            int index = mDisplayFile.lastIndexOf("\\");
+                            if (index > 0) {
+                                mDisplayFile = mDisplayFile.substring(index + 1, mDisplayFile.length());
+                            }
+                        }
+
+                        showPdf();
                     }
                     if (data.data.errorCategoryList != null && data.data.errorCategoryList.size() > 0) {
                         setBottomData(data.data.errorCategoryList);
@@ -257,10 +296,15 @@ public class MainActivity extends BaseActivity {
         });
     }
 
-    @Override
-    protected int getLayoutId() {
-        return R.layout.activity_main;
+    private void showPdf() {
+        if (TextUtils.isEmpty(mDisplayFile)) return;
+        if (FileUtils.fileExist(mActivity, mDisplayFile)) {
+            File dir = FileUtils.getCacheDir(mActivity);// 获取缓存所在的文件夹
+            File file = new File(dir, mDisplayFile);
+            mPDFView.fromFile(file).load();
+        }
     }
+
 
     public void setRightData(PositionInfoBean.DataBean.TerminalInfoBean data) {
         mData = data;
@@ -284,7 +328,8 @@ public class MainActivity extends BaseActivity {
         mRightData.add("0");
         //不良数
         mRightData.add("");
-        getBadNum(data.ProductDetailId);
+        mProductDetailId = data.ProductDetailId;
+        getBadNum();
         //不良率
         mRightData.add("0");
         //达成率
@@ -297,24 +342,28 @@ public class MainActivity extends BaseActivity {
      *
      * @return
      */
-    public void getBadNum(String ProductDetailId) {
+    public void getBadNum() {
         JSONObject jsonObject = new JSONObject();
         try {
             jsonObject.put("PositionIp", mIp);
             //工序唯一标识
-            jsonObject.put("ProductDetailId", ProductDetailId);
+            jsonObject.put("ProductDetailId", mProductDetailId);
         } catch (JSONException e) {
             e.printStackTrace();
         }
-        HttpUtils.doPost(HttpUrl.GET_POSITION_BAD_NUMBER, jsonObject, new CallBack() {
+        HttpUtils.doPost(HttpUrl.GET_POSITION_BAD_NUMBER, jsonObject, new CallBack<BadPositionBean>() {
             @Override
-            public void onSuccess(Object data) {
-
+            public void onSuccess(BadPositionBean data) {
+                if (data != null) {
+                    mRightData.set(8, data.data + "");
+                    mHomeRightAdapter.notifyDataSetChanged();
+                }
+                mHandler.sendEmptyMessageDelayed(BAD_NUM, POST_DELAY);
             }
 
             @Override
             public void onFailed(Throwable e) {
-
+                mHandler.sendEmptyMessageDelayed(BAD_NUM, POST_DELAY);
             }
         });
     }
@@ -381,5 +430,6 @@ public class MainActivity extends BaseActivity {
     protected void onDestroy() {
         super.onDestroy();
         FtpUtils.getInstance().close();
+        mHandler.removeMessages(BAD_NUM);
     }
 }

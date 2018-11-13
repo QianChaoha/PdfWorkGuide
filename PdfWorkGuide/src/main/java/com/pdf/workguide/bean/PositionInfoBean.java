@@ -50,7 +50,7 @@ public class PositionInfoBean extends BaseBean {
             public String ProcessName;
             public int ProductPlanNumber;
             public String ProductPlanDate;
-            public String ProductDetailId;
+            public int ProductDetailId;
             public String FileName;
             public String FileIssuedPositionUrl;
             public String FileIssuedPositionRealUrl;

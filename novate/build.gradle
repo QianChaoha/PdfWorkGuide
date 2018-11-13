@@ -5,7 +5,7 @@ android {
     buildToolsVersion rootProject.ext.versions['buildToolsVersion']
 
     defaultConfig {
-        minSdkVersion rootProject.ext.versions.minSdkVersion
+        minSdkVersion 16
         targetSdkVersion rootProject.ext.versions.targetSdkVersion
         versionCode 41
         versionName version
