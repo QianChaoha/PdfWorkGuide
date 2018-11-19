@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import com.pdf.workguide.R;
@@ -17,16 +18,15 @@ import com.pdf.workguide.R;
  */
 public abstract class BaseDialog {
     protected BaseCircleDialog mDialog;
-    protected LinearLayout mRootView;
+    protected RelativeLayout mRootView;
     protected Context mContext;
     protected BaseDialogInterface mDialogInterface;
     protected FrameLayout mContentWrapper;
     protected LinearLayout mTitleWrapper;
-    protected boolean mIsFirst = true;
 
     public BaseDialog(Context context) {
         mContext = context;
-        mRootView = (LinearLayout) View.inflate(mContext, R.layout.dialog_base, null);
+        mRootView = (RelativeLayout) View.inflate(mContext, R.layout.dialog_base, null);
         mDialog = new BaseCircleDialog(mContext, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, mRootView, R.style.Dialog);
         mRootView.findViewById(R.id.tvOk).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -48,6 +48,7 @@ public abstract class BaseDialog {
         Display display = windowManager.getDefaultDisplay();
         WindowManager.LayoutParams lp = mDialog.getWindow().getAttributes();
         lp.width = (int) (display.getWidth() * 0.8); //设置宽度
+        lp.height = (int) (display.getHeight() * 0.8); //设置高度
         mDialog.getWindow().setAttributes(lp);
 
         mDialog.getWindow().setFlags(
@@ -60,7 +61,7 @@ public abstract class BaseDialog {
      * 设置底部只有一个按钮
      */
     public void setBottomOneButton() {
-        mRootView.findViewById(R.id.tvCancle).setVisibility(View.GONE);
+        mRootView.findViewById(R.id.tvOk).setVisibility(View.GONE);
         mRootView.findViewById(R.id.bottomLine).setVisibility(View.GONE);
     }
 

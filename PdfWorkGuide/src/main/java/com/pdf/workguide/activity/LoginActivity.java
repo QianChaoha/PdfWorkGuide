@@ -1,8 +1,10 @@
 package com.pdf.workguide.activity;
 
+import android.content.Context;
 import android.content.Intent;
 import android.os.Environment;
 import android.os.StrictMode;
+import android.support.annotation.NonNull;
 import android.support.design.widget.TextInputEditText;
 import android.text.TextUtils;
 import android.view.View;
@@ -21,6 +23,14 @@ import com.pdf.workguide.util.GetPermissionUtil;
 import com.pdf.workguide.util.IpUtils;
 import com.pdf.workguide.util.LoaddingLayoutUtils;
 import com.pdf.workguide.util.ToastUtils;
+import com.scwang.smartrefresh.layout.SmartRefreshLayout;
+import com.scwang.smartrefresh.layout.api.DefaultRefreshFooterCreator;
+import com.scwang.smartrefresh.layout.api.DefaultRefreshHeaderCreator;
+import com.scwang.smartrefresh.layout.api.DefaultRefreshInitializer;
+import com.scwang.smartrefresh.layout.api.RefreshFooter;
+import com.scwang.smartrefresh.layout.api.RefreshHeader;
+import com.scwang.smartrefresh.layout.api.RefreshLayout;
+import com.scwang.smartrefresh.layout.header.ClassicsHeader;
 import com.tamic.novate.Throwable;
 
 import org.json.JSONException;
@@ -38,6 +48,17 @@ public class LoginActivity extends BaseActivity {
     public String mIp;
     public String mUserName;
     TextInputEditText mEtUser, mEtPassword;
+
+    static {
+        //使用static代码段可以防止内存泄漏
+        //全局设置默认的 Header
+        SmartRefreshLayout.setDefaultRefreshHeaderCreator(new DefaultRefreshHeaderCreator() {
+            @Override
+            public RefreshHeader createRefreshHeader(Context context, RefreshLayout layout) {
+                return new ClassicsHeader(context);
+            }
+        });
+    }
 
     @Override
     protected void initView() {

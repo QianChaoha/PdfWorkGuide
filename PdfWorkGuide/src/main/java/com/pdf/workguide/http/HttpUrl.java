@@ -23,4 +23,6 @@ public class HttpUrl {
     public static final String GET_TERMINAL_FILE_LIST = "Api/GetTerminalPositionFileList";
     //终端操作Sop文件列表更新状态
     public static final String TERMINAL_FILE_EDIT = "Api/TerminalPositionFileEdit";
+    //注销登陆
+    public static final String LOG_OUT = "Api/LogOut";
 }

@@ -1,18 +1,27 @@
 package com.pdf.workguide.activity;
 
+import android.content.Context;
+import android.content.DialogInterface;
 import android.graphics.Color;
+import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
+import android.support.annotation.NonNull;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.github.barteksc.pdfviewer.PDFView;
+import com.github.barteksc.pdfviewer.listener.OnLoadCompleteListener;
 import com.pdf.workguide.R;
 import com.pdf.workguide.adapter.HomeAdapter;
 import com.pdf.workguide.base.BaseActivity;
@@ -28,8 +37,13 @@ import com.pdf.workguide.http.HttpUtils;
 import com.pdf.workguide.util.ErrorLogUtils;
 import com.pdf.workguide.util.FileUtils;
 import com.pdf.workguide.util.FtpUtils;
+import com.pdf.workguide.util.ToastUtils;
 import com.pdf.workguide.view.dialog.ListDialog;
+import com.scwang.smartrefresh.layout.SmartRefreshLayout;
+import com.scwang.smartrefresh.layout.api.RefreshLayout;
+import com.scwang.smartrefresh.layout.listener.OnRefreshListener;
 import com.tamic.novate.Throwable;
+import com.tencent.smtt.sdk.TbsReaderView;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -40,14 +54,13 @@ import java.util.List;
 
 import static com.pdf.workguide.http.HttpUrl.FILE_SERVER_URL;
 
-public class MainActivity extends BaseActivity {
+public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCallback {
     RecyclerView mRecycleViewLeft, mRecycleViewRight;
     LinearLayout mLlBottom;
     final String[] mLeftArr = new String[]{"工位号", "员工编号", "产品品名", "产品品号", "产品工序", "计划产量",
             "计划时间", "实际产量", "不良数", "不良率", "达成率"};
     List<String> mLeftData = new ArrayList<String>();
     List<String> mRightData = new ArrayList<String>();
-    List<String> mBottomData = new ArrayList<String>();
     private String mUserName;
     private String mIp;
     private HomeAdapter mHomeRightAdapter;
@@ -55,7 +68,8 @@ public class MainActivity extends BaseActivity {
     private PositionInfoBean.DataBean.TerminalInfoBean mData;
     private static final int BAD_NUM = 1;//不良数
     private static final int GET_FILE_LIST = 2;//文件列表
-    private static final int POST_DELAY = 500;
+    private static final int CHANGE_PAGE = 3;//切换页数
+    private static final int POST_DELAY = 5000;
     Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -66,12 +80,24 @@ public class MainActivity extends BaseActivity {
                 case GET_FILE_LIST:
                     getPdf();
                     break;
+                case CHANGE_PAGE:
+                    int nextPage = mPDFView.getCurrentPage() + 1;
+                    mPDFView.jumpTo(nextPage >= mPDFView.getPageCount() ? 0 : nextPage, true);
+                    mHandler.sendEmptyMessageDelayed(CHANGE_PAGE, mFilePlaybackTime * 1000);
+                    break;
             }
         }
     };
     private int mProductDetailId;
     private String mDisplayFile;//需要展示出来的文件名
     PDFView mPDFView;
+    private int mFilePlaybackTime = -1;//多页切换时间
+    SmartRefreshLayout mSmartRefreshLayout;
+    final String XLS = ".xls";
+    final String PDF = ".pdf";
+    TbsReaderView mTbsReaderView;
+    FrameLayout mShowFileWrapper;
+    private AlertDialog mAlertDialog;
 
     @Override
     protected int getLayoutId() {
@@ -80,8 +106,20 @@ public class MainActivity extends BaseActivity {
 
     @Override
     protected void initView() {
-        mPDFView = findViewById(R.id.pdfView);
-
+        mShowFileWrapper = findViewById(R.id.showFileWrapper);
+        mSmartRefreshLayout = findViewById(R.id.smartRefreshLayout);
+        mSmartRefreshLayout.setEnableLoadMore(false);
+        mSmartRefreshLayout.setOnRefreshListener(new OnRefreshListener() {
+            @Override
+            public void onRefresh(@NonNull RefreshLayout refreshLayout) {
+                mHandler.removeMessages(BAD_NUM);
+                mHandler.removeMessages(GET_FILE_LIST);
+                mHandler.removeMessages(CHANGE_PAGE);
+                //获取工位信息
+                getPositionData();
+                getPdf();
+            }
+        });
         mRecycleViewLeft = findViewById(R.id.recycleViewLeft);
         mRecycleViewLeft.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false));
 
@@ -93,7 +131,7 @@ public class MainActivity extends BaseActivity {
         InitFTPServerSetting();
         mListDialog = new ListDialog(mActivity) {
             @Override
-            public void itemClick(View view, int position, PositionBadInfoBean.DataBean dataBean) {
+            public void itemClick(View view, int position, final PositionBadInfoBean.DataBean dataBean) {
                 JSONObject jsonObject = new JSONObject();
                 try {
                     jsonObject.put("PositionIp", mIp);
@@ -105,10 +143,10 @@ public class MainActivity extends BaseActivity {
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
-                HttpUtils.doPost(HttpUrl.GET_POSITION_BAD, jsonObject, new CallBack() {
+                HttpUtils.doPost(HttpUrl.GET_POSITION_BAD, jsonObject, new CallBack<BaseBean>() {
                     @Override
-                    public void onSuccess(Object data) {
-
+                    public void onSuccess(BaseBean data) {
+                        ToastUtils.showNomal(mActivity, "添加" + dataBean.ProcessErrorName + "成功");
                     }
 
                     @Override
@@ -144,13 +182,63 @@ public class MainActivity extends BaseActivity {
                 mHomeRightAdapter = new HomeAdapter(mActivity, mRightData, itemHeight);
                 mRecycleViewRight.setAdapter(mHomeRightAdapter);
 
-
-                //获取工位信息
-                getPositionData();
-                getPdf();
+                mSmartRefreshLayout.autoRefresh();
             }
         });
 
+    }
+
+    public void logOut(View view) {
+        //    通过AlertDialog.Builder这个类来实例化我们的一个AlertDialog的对象
+        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+        //    设置Title的图标
+        //builder.setIcon(R.drawable.ic_launcher);
+        //    设置Title的内容
+        builder.setTitle("提示");
+        //    设置Content来显示一个信息
+        builder.setMessage("确定退出吗？");
+        //    设置一个PositiveButton
+        builder.setPositiveButton("确定", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                mAlertDialog.dismiss();
+                logOut();
+            }
+        });
+        //    设置一个NegativeButton
+        builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                mAlertDialog.dismiss();
+            }
+        });
+        //    显示出该对话框
+        mAlertDialog = builder.show();
+
+    }
+
+    public void logOut() {
+        JSONObject jsonObject = new JSONObject();
+        try {
+            jsonObject.put("LoginName", mUserName);
+            jsonObject.put("PositionIp", mIp);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        mLoaddingLayoutUtils.show();
+        HttpUtils.doPost(HttpUrl.LOG_OUT, jsonObject, new CallBack<BaseBean>() {
+            @Override
+            public void onSuccess(BaseBean data) {
+                mLoaddingLayoutUtils.dismiss();
+                finish();
+            }
+
+            @Override
+            public void onFailed(Throwable e) {
+                mLoaddingLayoutUtils.dismiss();
+                ErrorLogUtils.showError(e, mActivity);
+            }
+        });
     }
 
     public void InitFTPServerSetting() {
@@ -179,7 +267,7 @@ public class MainActivity extends BaseActivity {
                                 if (dataBean != null && !TextUtils.isEmpty(dataBean.FileIssuedPositionUrl)) {
                                     String fileName = dataBean.FileIssuedPositionUrl;
                                     String remotePath = "";
-                                    if (fileName.contains("\\")) {
+                                    if (fileName != null && fileName.contains("\\")) {
                                         int index = fileName.lastIndexOf("\\");
                                         if (index > 0) {
                                             remotePath = fileName.substring(0, index);
@@ -203,7 +291,7 @@ public class MainActivity extends BaseActivity {
         });
     }
 
-    private void operateFile(TermialFileListBean.DataBean dataBean, final String remotePath, final String fileName) {
+    private void operateFile(TermialFileListBean.DataBean dataBean, final String remotePath, String fileName) {
         if (dataBean.ClientIsDownload) {
             if (dataBean.IsDeleted) {
                 //从缓存中删除
@@ -221,6 +309,7 @@ public class MainActivity extends BaseActivity {
                 // remotePath   "/AllFile"
                 ///storage/emulated/0/Android/data/com.pdf.workguide/cache/Dingan/JMeter相关的问题（整理）.docx
                 if (FtpUtils.getInstance().downLoadFile(remotePath, file.getAbsolutePath().toString(), fileName) && file.exists()) {
+
                     if (fileName != null && fileName.equals(mDisplayFile)) {
                         showPdf();
                     }
@@ -255,7 +344,6 @@ public class MainActivity extends BaseActivity {
         if (getIntent() == null) return;
         mUserName = getIntent().getStringExtra("userName");
         mIp = getIntent().getStringExtra("ip");
-        mLoaddingLayoutUtils.show();
         JSONObject jsonObject = new JSONObject();
         try {
             jsonObject.put("LoginName", mUserName);
@@ -267,11 +355,11 @@ public class MainActivity extends BaseActivity {
         HttpUtils.doPost(HttpUrl.GET_POSITION_INFO, jsonObject, new CallBack<PositionInfoBean>() {
             @Override
             public void onSuccess(PositionInfoBean data) {
-                mLoaddingLayoutUtils.dismiss();
+                mSmartRefreshLayout.finishRefresh();
                 if (data != null && data.data != null) {
                     if (data.data.terminalInfo != null) {
                         setRightData(data.data.terminalInfo);
-
+                        mFilePlaybackTime = data.data.terminalInfo.FilePlaybackTime;
                         mDisplayFile = data.data.terminalInfo.FileIssuedPositionUrl;
                         if (mDisplayFile != null && mDisplayFile.contains("\\")) {
                             int index = mDisplayFile.lastIndexOf("\\");
@@ -290,7 +378,6 @@ public class MainActivity extends BaseActivity {
 
             @Override
             public void onFailed(Throwable e) {
-                mLoaddingLayoutUtils.dismiss();
                 ErrorLogUtils.showError(e, mActivity);
             }
         });
@@ -301,8 +388,85 @@ public class MainActivity extends BaseActivity {
         if (FileUtils.fileExist(mActivity, mDisplayFile)) {
             File dir = FileUtils.getCacheDir(mActivity);// 获取缓存所在的文件夹
             File file = new File(dir, mDisplayFile);
-            mPDFView.fromFile(file).load();
+            if (mDisplayFile.toLowerCase().endsWith(PDF)) {
+                mShowFileWrapper.removeAllViews();
+                mPDFView = new PDFView(this, null);
+                mShowFileWrapper.addView(mPDFView, new FrameLayout.LayoutParams(-1, -1));
+                mPDFView.fromFile(file).onLoad(new OnLoadCompleteListener() {
+                    @Override
+                    public void loadComplete(int nbPages) {
+                        if (mFilePlaybackTime > 0) {
+                            mHandler.sendEmptyMessageDelayed(CHANGE_PAGE, mFilePlaybackTime * 1000);
+                        }
+
+                    }
+                }).load();
+            } else {
+                displayFile(file);
+            }
         }
+    }
+
+    public void displayFile(File mFile) {
+        //mFile = new File("/storage/emulated/0/新建 XLSX 工作表.xlsx");
+        if (mFile != null && !TextUtils.isEmpty(mFile.toString())) {
+            mShowFileWrapper.removeAllViews();
+            mTbsReaderView = new TbsReaderView(this, this);
+            mShowFileWrapper.addView(mTbsReaderView, new FrameLayout.LayoutParams(-1, -1));
+            mHandler.removeMessages(CHANGE_PAGE);
+            //增加下面一句解决没有TbsReaderTemp文件夹存在导致加载文件失败
+
+            //增加下面一句解决没有TbsReaderTemp文件夹存在导致加载文件失败
+            String bsReaderTemp = "/storage/emulated/0/TbsReaderTemp";
+            File bsReaderTempFile = new File(bsReaderTemp);
+
+            if (!bsReaderTempFile.exists()) {
+                boolean mkdir = bsReaderTempFile.mkdir();
+                if (!mkdir) {
+                }
+            }
+
+            //加载文件
+            Bundle localBundle = new Bundle();
+            localBundle.putString("filePath", mFile.toString());
+
+            localBundle.putString("tempPath", Environment.getExternalStorageDirectory() + "/" + "TbsReaderTemp");
+
+            if (this.mTbsReaderView == null)
+                this.mTbsReaderView = getTbsReaderView(this);
+            boolean bool = this.mTbsReaderView.preOpen(getFileType(mFile.toString()), false);
+            if (bool) {
+                this.mTbsReaderView.openFile(localBundle);
+            }
+        } else {
+        }
+
+    }
+
+    private TbsReaderView getTbsReaderView(Context context) {
+        return new TbsReaderView(context, this);
+    }
+
+    /***
+     * 获取文件类型
+     *
+     * @param paramString
+     * @return
+     */
+    private String getFileType(String paramString) {
+        String str = "";
+
+        if (TextUtils.isEmpty(paramString)) {
+            return str;
+        }
+        int i = paramString.lastIndexOf('.');
+        if (i <= -1) {
+            return str;
+        }
+
+
+        str = paramString.substring(i + 1);
+        return str;
     }
 
 
@@ -322,7 +486,13 @@ public class MainActivity extends BaseActivity {
         //计划产量
         mRightData.add(data.ProductPlanNumber + "");
         //计划时间
-        mRightData.add(data.ProductPlanDate);
+        String time = "2018-11-14";
+        if (!TextUtils.isEmpty(data.ProductPlanDate) && data.ProductPlanDate.length() > time.length()) {
+            mRightData.add(data.ProductPlanDate.substring(0, time.length()));
+        } else {
+            mRightData.add(data.ProductPlanDate);
+
+        }
 
         //实际产量
         mRightData.add("0");
@@ -431,5 +601,15 @@ public class MainActivity extends BaseActivity {
         super.onDestroy();
         FtpUtils.getInstance().close();
         mHandler.removeMessages(BAD_NUM);
+        mHandler.removeMessages(GET_FILE_LIST);
+        mHandler.removeMessages(CHANGE_PAGE);
+        if (mTbsReaderView != null) {
+            mTbsReaderView.onStop();
+        }
+    }
+
+    @Override
+    public void onCallBackAction(Integer integer, Object o, Object o1) {
+
     }
 }

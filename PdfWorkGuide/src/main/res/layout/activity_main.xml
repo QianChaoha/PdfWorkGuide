@@ -1,65 +1,94 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <LinearLayout xmlns:tools="http://schemas.android.com/tools"
+    <com.scwang.smartrefresh.layout.SmartRefreshLayout
+        android:id="@+id/smartRefreshLayout"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="horizontal"
-        tools:context="com.pdf.workguide.activity.MainActivity">
-        <com.github.barteksc.pdfviewer.PDFView
-            android:id="@+id/pdfView"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="3"/>
+        android:layout_height="match_parent">
+
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="@color/commenColor"
-            android:orientation="vertical">
+            android:orientation="horizontal">
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="5"
-                android:orientation="horizontal">
+            <FrameLayout
+                android:id="@+id/showFileWrapper"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="3">
 
-                <android.support.v7.widget.RecyclerView
-                    android:id="@+id/recycleViewLeft"
-                    android:layout_width="0dp"
+            </FrameLayout>
+
+
+            <RelativeLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@color/commenColor"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/bottomWrapper"
+                    android:layout_width="match_parent"
+                    android:layout_height="90dp"
+                    android:layout_alignParentBottom="true"
+                    android:orientation="vertical"
+                    android:paddingBottom="3dp">
+
+                    <View
+                        android:id="@+id/bottomLine"
+                        android:layout_width="match_parent"
+                        android:layout_height="2px"
+                        android:layout_above="@+id/llBottom"
+                        android:background="#33000000"
+                        android:visibility="gone" />
+
+                    <LinearLayout
+                        android:id="@+id/llBottom"
+                        android:layout_width="match_parent"
+                        android:layout_height="40dp"
+                        android:orientation="horizontal"></LinearLayout>
+
+                    <android.support.v7.widget.AppCompatButton
+                        android:layout_width="match_parent"
+                        android:layout_height="46dp"
+                        android:onClick="logOut"
+                        android:text="退出登录" />
+                </LinearLayout>
+
+
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:layout_weight="1"></android.support.v7.widget.RecyclerView>
+                    android:layout_above="@+id/bottomWrapper"
+                    android:orientation="horizontal">
 
-                <android.support.v7.widget.RecyclerView
-                    android:id="@+id/recycleViewRight"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"></android.support.v7.widget.RecyclerView>
-            </LinearLayout>
+                    <android.support.v7.widget.RecyclerView
+                        android:id="@+id/recycleViewLeft"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"></android.support.v7.widget.RecyclerView>
 
-            <!--<LinearLayout-->
+                    <android.support.v7.widget.RecyclerView
+                        android:id="@+id/recycleViewRight"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"></android.support.v7.widget.RecyclerView>
+                </LinearLayout>
+
+                <!--<LinearLayout-->
                 <!--android:layout_width="match_parent"-->
                 <!--android:layout_height="0dp"-->
                 <!--android:layout_weight="2"></LinearLayout>-->
-            <View
-                android:id="@+id/bottomLine"
-                android:visibility="gone"
-                android:layout_width="match_parent"
-                android:layout_height="2px"
-                android:background="#33000000"/>
-            <LinearLayout
-                android:id="@+id/llBottom"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:orientation="horizontal"></LinearLayout>
-        </LinearLayout>
 
-    </LinearLayout>
+
+            </RelativeLayout>
+
+        </LinearLayout>
+    </com.scwang.smartrefresh.layout.SmartRefreshLayout>
+
 
     <include layout="@layout/loadding_view" />
 

@@ -35,6 +35,8 @@ public abstract class ListDialog extends BaseDialog {
     public void initView() {
         mRecyclerView = mRootView.findViewById(R.id.recycleView);
         mRecyclerView.setLayoutManager(new GridLayoutManager(mContext, 3));
+        setBottomOneButton();
+        setTitle("工位不良类别列表");
     }
 
     public void setContent(final PositionBadInfoBean data) {
