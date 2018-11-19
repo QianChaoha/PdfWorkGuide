@@ -3,6 +3,7 @@ package com.pdf.workguide;
 import android.app.Application;
 
 import com.pdf.workguide.http.HttpUtils;
+import com.tencent.bugly.Bugly;
 import com.tencent.smtt.sdk.QbSdk;
 
 /**
@@ -17,5 +18,7 @@ public class MainApplication extends Application {
         super.onCreate();
         QbSdk.initX5Environment(this,null);
         HttpUtils.init(getApplicationContext());
+        Bugly.init(getApplicationContext(), "a57ce0cc06", BuildConfig.DEBUG);//bugly
+
     }
 }

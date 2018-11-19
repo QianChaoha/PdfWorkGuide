@@ -17,6 +17,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -69,7 +70,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
     private static final int BAD_NUM = 1;//不良数
     private static final int GET_FILE_LIST = 2;//文件列表
     private static final int CHANGE_PAGE = 3;//切换页数
-    private static final int POST_DELAY = 5000;
+    private static final int POST_DELAY = 20000;
     Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -98,6 +99,9 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
     TbsReaderView mTbsReaderView;
     FrameLayout mShowFileWrapper;
     private AlertDialog mAlertDialog;
+    ProgressBar mProgressBar;
+    boolean mIsFileShow;//文件是否已经加载
+    boolean mIsFirst = true;
 
     @Override
     protected int getLayoutId() {
@@ -106,18 +110,28 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
 
     @Override
     protected void initView() {
+        mProgressBar = findViewById(R.id.progressBar);
         mShowFileWrapper = findViewById(R.id.showFileWrapper);
         mSmartRefreshLayout = findViewById(R.id.smartRefreshLayout);
         mSmartRefreshLayout.setEnableLoadMore(false);
         mSmartRefreshLayout.setOnRefreshListener(new OnRefreshListener() {
             @Override
             public void onRefresh(@NonNull RefreshLayout refreshLayout) {
+                if (!mIsFirst){
+                    if (mTbsReaderView != null) {
+                        mTbsReaderView.onStop();
+                    }
+                    FtpUtils.getInstance().close();
+                    InitFTPServerSetting();
+                }
+                mIsFileShow = false;
                 mHandler.removeMessages(BAD_NUM);
                 mHandler.removeMessages(GET_FILE_LIST);
                 mHandler.removeMessages(CHANGE_PAGE);
                 //获取工位信息
                 getPositionData();
-                getPdf();
+                mIsFirst = false;
+
             }
         });
         mRecycleViewLeft = findViewById(R.id.recycleViewLeft);
@@ -196,6 +210,8 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
         //    设置Title的内容
         builder.setTitle("提示");
         //    设置Content来显示一个信息
+        //String data="要显示的文件名称:"+mDisplayFile+"\n";
+
         builder.setMessage("确定退出吗？");
         //    设置一个PositiveButton
         builder.setPositiveButton("确定", new DialogInterface.OnClickListener() {
@@ -277,8 +293,10 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
                                     operateFile(dataBean, remotePath, fileName);
                                 }
                             }
+                        } else {
+                            showPdf();
                         }
-                        mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
+
                     }
                 }.start();
 
@@ -292,6 +310,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
     }
 
     private void operateFile(TermialFileListBean.DataBean dataBean, final String remotePath, String fileName) {
+        System.out.println("dataBean.ClientIsDownload " + dataBean.ClientIsDownload + " dataBean.IsDeleted " + dataBean.IsDeleted);
         if (dataBean.ClientIsDownload) {
             if (dataBean.IsDeleted) {
                 //从缓存中删除
@@ -304,20 +323,37 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
                 //重新下载到缓存
                 File dir = FileUtils.getCacheDir(mActivity);// 获取缓存所在的文件夹
                 File file = new File(dir, fileName);
-                System.out.println("remotePath  " + remotePath);
+                System.out.println("mDisplayFile  " + mDisplayFile);
                 System.out.println("fileName  " + fileName);
+
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mProgressBar.setVisibility(View.VISIBLE);
+                    }
+                });
                 // remotePath   "/AllFile"
                 ///storage/emulated/0/Android/data/com.pdf.workguide/cache/Dingan/JMeter相关的问题（整理）.docx
                 if (FtpUtils.getInstance().downLoadFile(remotePath, file.getAbsolutePath().toString(), fileName) && file.exists()) {
-
                     if (fileName != null && fileName.equals(mDisplayFile)) {
                         showPdf();
                     }
                     terminalPositionFileEdit(dataBean.PositionFileId);
                 }
+                hideLoaddding();
             }
         }
+        mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
 
+    }
+
+    private void hideLoaddding() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mProgressBar.setVisibility(View.GONE);
+            }
+        });
     }
 
     private void terminalPositionFileEdit(int positionFileId) {
@@ -367,8 +403,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
                                 mDisplayFile = mDisplayFile.substring(index + 1, mDisplayFile.length());
                             }
                         }
-
-                        showPdf();
+                        getPdf();
                     }
                     if (data.data.errorCategoryList != null && data.data.errorCategoryList.size() > 0) {
                         setBottomData(data.data.errorCategoryList);
@@ -384,27 +419,41 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
     }
 
     private void showPdf() {
-        if (TextUtils.isEmpty(mDisplayFile)) return;
-        if (FileUtils.fileExist(mActivity, mDisplayFile)) {
-            File dir = FileUtils.getCacheDir(mActivity);// 获取缓存所在的文件夹
-            File file = new File(dir, mDisplayFile);
-            if (mDisplayFile.toLowerCase().endsWith(PDF)) {
-                mShowFileWrapper.removeAllViews();
-                mPDFView = new PDFView(this, null);
-                mShowFileWrapper.addView(mPDFView, new FrameLayout.LayoutParams(-1, -1));
-                mPDFView.fromFile(file).onLoad(new OnLoadCompleteListener() {
-                    @Override
-                    public void loadComplete(int nbPages) {
-                        if (mFilePlaybackTime > 0) {
-                            mHandler.sendEmptyMessageDelayed(CHANGE_PAGE, mFilePlaybackTime * 1000);
-                        }
+        if (mIsFileShow) {
+            mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
+            return;
+        }
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mProgressBar.setVisibility(View.GONE);
+                if (TextUtils.isEmpty(mDisplayFile)) return;
+                if (FileUtils.fileExist(mActivity, mDisplayFile)) {
+                    File dir = FileUtils.getCacheDir(mActivity);// 获取缓存所在的文件夹
+                    final File file = new File(dir, mDisplayFile);
+                    if (mDisplayFile.toLowerCase().endsWith(PDF)) {
+                        mShowFileWrapper.removeAllViews();
+                        mPDFView = new PDFView(mActivity, null);
+                        mShowFileWrapper.addView(mPDFView, new FrameLayout.LayoutParams(-1, -1));
+                        mPDFView.fromFile(file).onLoad(new OnLoadCompleteListener() {
+                            @Override
+                            public void loadComplete(int nbPages) {
+                                mIsFileShow = true;
+                                if (mFilePlaybackTime > 0) {
+                                    mHandler.sendEmptyMessageDelayed(CHANGE_PAGE, mFilePlaybackTime * 1000);
+                                }
+
+                            }
+                        }).load();
+                    } else {
+                        displayFile(file);
 
                     }
-                }).load();
-            } else {
-                displayFile(file);
+                }
+                mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
             }
-        }
+        });
+
     }
 
     public void displayFile(File mFile) {
@@ -437,6 +486,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
             boolean bool = this.mTbsReaderView.preOpen(getFileType(mFile.toString()), false);
             if (bool) {
                 this.mTbsReaderView.openFile(localBundle);
+                mIsFileShow = true;
             }
         } else {
         }

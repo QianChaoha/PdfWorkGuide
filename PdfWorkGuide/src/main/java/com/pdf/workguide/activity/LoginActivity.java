@@ -102,7 +102,7 @@ public class LoginActivity extends BaseActivity {
             ToastUtils.showError(mActivity, "密码不能为空");
             return;
         }
-        mIp = "192.168.1.222";
+        //mIp = "192.168.1.222";
         mLoaddingLayoutUtils.show();
         JSONObject jsonObject = new JSONObject();
         try {

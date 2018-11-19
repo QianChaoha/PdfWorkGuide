@@ -1,5 +1,26 @@
 apply plugin: 'com.android.application'
+apply plugin: 'bugly'
+ext { // 定义当前gradle文件的全局变量
+    isRelease = checkRelease()
+}
 
+// 通过task判断是否为release，比判断Variant好
+def checkRelease() {
+    def runTasks = gradle.startParameter.taskNames
+    for (String task : runTasks) {
+        // 我这里根据task为"assemble"和非"Debug"认定为release
+        if (task.contains("assemble") && !task.contains("Debug")) {
+            return true
+        }
+    }
+    return false
+}
+bugly {
+    appId = 'a57ce0cc06' // 注册时分配的App ID
+    appKey = '664fc85d-9aae-4d1f-aac1-7830079a6fd5' // 注册时分配的App Key
+    debug = true // 打开debug模式可以观察到日志
+    execute = isRelease // 仅在release包中使用bugly
+}
 android {
     compileSdkVersion rootProject.ext.versions['compileSdkVersion']
     buildToolsVersion rootProject.ext.versions['buildToolsVersion']
@@ -49,4 +70,7 @@ dependencies {
     implementation 'com.github.barteksc:android-pdf-viewer:2.8.2'
     implementation 'com.scwang.smartrefresh:SmartRefreshLayout:1.1.0-alpha-7'
     implementation 'com.scwang.smartrefresh:SmartRefreshHeader:1.1.0-alpha-7'
+    //bugly
+    implementation 'com.tencent.bugly:crashreport_upgrade:latest.release'
+    implementation 'com.tencent.bugly:nativecrashreport:latest.release'
 }
