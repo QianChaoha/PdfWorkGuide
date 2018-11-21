@@ -19,10 +19,12 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.github.barteksc.pdfviewer.PDFView;
 import com.github.barteksc.pdfviewer.listener.OnLoadCompleteListener;
+import com.liulishuo.filedownloader.BaseDownloadTask;
+import com.liulishuo.filedownloader.FileDownloadListener;
+import com.liulishuo.filedownloader.FileDownloader;
 import com.pdf.workguide.R;
 import com.pdf.workguide.adapter.HomeAdapter;
 import com.pdf.workguide.base.BaseActivity;
@@ -37,13 +39,14 @@ import com.pdf.workguide.http.HttpUrl;
 import com.pdf.workguide.http.HttpUtils;
 import com.pdf.workguide.util.ErrorLogUtils;
 import com.pdf.workguide.util.FileUtils;
-import com.pdf.workguide.util.FtpUtils;
 import com.pdf.workguide.util.ToastUtils;
 import com.pdf.workguide.view.dialog.ListDialog;
 import com.scwang.smartrefresh.layout.SmartRefreshLayout;
 import com.scwang.smartrefresh.layout.api.RefreshLayout;
 import com.scwang.smartrefresh.layout.listener.OnRefreshListener;
 import com.tamic.novate.Throwable;
+import com.tamic.novate.callback.RxFileCallBack;
+import com.tamic.novate.util.FileUtil;
 import com.tencent.smtt.sdk.TbsReaderView;
 
 import org.json.JSONException;
@@ -51,9 +54,8 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-
-import static com.pdf.workguide.http.HttpUrl.FILE_SERVER_URL;
 
 public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCallback {
     RecyclerView mRecycleViewLeft, mRecycleViewRight;
@@ -70,7 +72,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
     private static final int BAD_NUM = 1;//不良数
     private static final int GET_FILE_LIST = 2;//文件列表
     private static final int CHANGE_PAGE = 3;//切换页数
-    private static final int POST_DELAY = 20000;
+    private static final int POST_DELAY = 600;
     Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -117,12 +119,12 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
         mSmartRefreshLayout.setOnRefreshListener(new OnRefreshListener() {
             @Override
             public void onRefresh(@NonNull RefreshLayout refreshLayout) {
-                if (!mIsFirst){
+                if (!mIsFirst) {
                     if (mTbsReaderView != null) {
                         mTbsReaderView.onStop();
                     }
-                    FtpUtils.getInstance().close();
-                    InitFTPServerSetting();
+                    //FtpUtils.getInstance().close();
+                    //InitFTPServerSetting();
                 }
                 mIsFileShow = false;
                 mHandler.removeMessages(BAD_NUM);
@@ -258,8 +260,8 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
     }
 
     public void InitFTPServerSetting() {
-        FtpUtils ftpUtils = FtpUtils.getInstance();
-        ftpUtils.initFTPSetting(FILE_SERVER_URL, 26, "FtpUser", "lin_123456");
+//        FtpUtils ftpUtils = FtpUtils.getInstance();
+//        ftpUtils.initFTPSetting(FILE_SERVER_URL, 26, "FtpUser", "lin_123456");
 
     }
 
@@ -282,15 +284,14 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
                                 TermialFileListBean.DataBean dataBean = data.data.get(i);
                                 if (dataBean != null && !TextUtils.isEmpty(dataBean.FileIssuedPositionUrl)) {
                                     String fileName = dataBean.FileIssuedPositionUrl;
-                                    String remotePath = "";
                                     if (fileName != null && fileName.contains("\\")) {
                                         int index = fileName.lastIndexOf("\\");
                                         if (index > 0) {
-                                            remotePath = fileName.substring(0, index);
                                             fileName = fileName.substring(index + 1, fileName.length());
                                         }
                                     }
-                                    operateFile(dataBean, remotePath, fileName);
+                                    String dealPath = dataBean.FileIssuedPositionUrl.replaceAll("\\\\", "/");
+                                    operateFile(dataBean, HttpUrl.FILE_SERVER_URL + dealPath, fileName);
                                 }
                             }
                         } else {
@@ -309,7 +310,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
         });
     }
 
-    private void operateFile(TermialFileListBean.DataBean dataBean, final String remotePath, String fileName) {
+    private void operateFile(final TermialFileListBean.DataBean dataBean, final String remotePath, final String fileName) {
         System.out.println("dataBean.ClientIsDownload " + dataBean.ClientIsDownload + " dataBean.IsDeleted " + dataBean.IsDeleted);
         if (dataBean.ClientIsDownload) {
             if (dataBean.IsDeleted) {
@@ -319,6 +320,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
                         terminalPositionFileEdit(dataBean.PositionFileId);
                     }
                 }
+                mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
             } else {
                 //重新下载到缓存
                 File dir = FileUtils.getCacheDir(mActivity);// 获取缓存所在的文件夹
@@ -334,16 +336,47 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
                 });
                 // remotePath   "/AllFile"
                 ///storage/emulated/0/Android/data/com.pdf.workguide/cache/Dingan/JMeter相关的问题（整理）.docx
-                if (FtpUtils.getInstance().downLoadFile(remotePath, file.getAbsolutePath().toString(), fileName) && file.exists()) {
-                    if (fileName != null && fileName.equals(mDisplayFile)) {
-                        showPdf();
+
+                HttpUtils.getNovate().rxGet(remotePath, new HashMap<String, Object>(), new RxFileCallBack(dir.getPath(), fileName) {
+
+                    @Override
+                    public void onStart(Object tag) {
+                        super.onStart(tag);
                     }
-                    terminalPositionFileEdit(dataBean.PositionFileId);
-                }
-                hideLoaddding();
+
+                    @Override
+                    public void onNext(Object tag, File file) {
+                    }
+
+                    @Override
+                    public void onProgress(Object tag, float progress, long downloaded, long total) {
+                    }
+
+                    @Override
+                    public void onError(Object tag, Throwable e) {
+                        hideLoaddding();
+                        mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
+                    }
+
+                    @Override
+                    public void onCancel(Object tag, Throwable e) {
+
+                    }
+
+                    @Override
+                    public void onCompleted(Object tag) {
+                        super.onCompleted(tag);
+                        hideLoaddding();
+                        if (fileName != null && fileName.equals(mDisplayFile)) {
+                            showPdf();
+                        }
+                        terminalPositionFileEdit(dataBean.PositionFileId);
+                    }
+                });
             }
+        } else {
+            mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
         }
-        mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
 
     }
 
@@ -366,12 +399,12 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
         HttpUtils.doPost(HttpUrl.TERMINAL_FILE_EDIT, jsonObject, new CallBack<BaseBean>() {
             @Override
             public void onSuccess(BaseBean data) {
-
+                mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
             }
 
             @Override
             public void onFailed(Throwable e) {
-
+                mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
             }
         });
     }
@@ -396,13 +429,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
                     if (data.data.terminalInfo != null) {
                         setRightData(data.data.terminalInfo);
                         mFilePlaybackTime = data.data.terminalInfo.FilePlaybackTime;
-                        mDisplayFile = data.data.terminalInfo.FileIssuedPositionUrl;
-                        if (mDisplayFile != null && mDisplayFile.contains("\\")) {
-                            int index = mDisplayFile.lastIndexOf("\\");
-                            if (index > 0) {
-                                mDisplayFile = mDisplayFile.substring(index + 1, mDisplayFile.length());
-                            }
-                        }
+                        mDisplayFile = data.data.terminalInfo.FileName;
                         getPdf();
                     }
                     if (data.data.errorCategoryList != null && data.data.errorCategoryList.size() > 0) {
@@ -649,7 +676,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        FtpUtils.getInstance().close();
+        //FtpUtils.getInstance().close();
         mHandler.removeMessages(BAD_NUM);
         mHandler.removeMessages(GET_FILE_LIST);
         mHandler.removeMessages(CHANGE_PAGE);

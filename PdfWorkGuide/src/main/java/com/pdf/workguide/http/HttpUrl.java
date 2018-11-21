@@ -11,7 +11,7 @@ public class HttpUrl {
 //    public static final String SERVER_URL = "http://192.168.1.154:8035/";
 //    public static final String FILE_SERVER_URL = "192.168.1.154";
     public static final String SERVER_URL = "http://101.200.50.2:8035/";
-    public static final String FILE_SERVER_URL = "101.200.50.2";
+    public static final String FILE_SERVER_URL = "http://101.200.50.2:8035/Uploads/SopFile";
 
     public static final String LOGIN = "Api/Login";
     public static final String GET_POSITION_INFO = "Api/GetPositionInfo";
