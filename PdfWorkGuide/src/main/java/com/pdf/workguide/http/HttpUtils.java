@@ -38,10 +38,10 @@ public class HttpUtils {
                     mNovate = new Novate.Builder(mContext)
                             //.addParameters(parameters)
                             .connectTimeout(30)
-                            .writeTimeout(20)
+                            .writeTimeout(90)
                             .baseUrl(HttpUrl.SERVER_URL)
                             .addHeader(headers)
-                            .addCache(true)
+                            .addCache(false)
                             .addLog(true)
                             .build();
                 }

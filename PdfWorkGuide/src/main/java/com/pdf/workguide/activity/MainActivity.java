@@ -70,7 +70,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
     ListDialog mListDialog;
     private PositionInfoBean.DataBean.TerminalInfoBean mData;
     private static final int BAD_NUM = 1;//不良数
-    private static final int GET_FILE_LIST = 2;//文件列表
+    //private static final int GET_FILE_LIST = 2;//文件列表
     private static final int CHANGE_PAGE = 3;//切换页数
     private static final int POST_DELAY = 600;
     Handler mHandler = new Handler() {
@@ -80,9 +80,9 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
                 case BAD_NUM:
                     getBadNum();
                     break;
-                case GET_FILE_LIST:
-                    getPdf();
-                    break;
+//                case GET_FILE_LIST:
+//                    getPdf();
+//                    break;
                 case CHANGE_PAGE:
                     int nextPage = mPDFView.getCurrentPage() + 1;
                     mPDFView.jumpTo(nextPage >= mPDFView.getPageCount() ? 0 : nextPage, true);
@@ -104,6 +104,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
     ProgressBar mProgressBar;
     boolean mIsFileShow;//文件是否已经加载
     boolean mIsFirst = true;
+    public PositionInfoBean.DataBean.TerminalInfoBean mTerminalInfoBean;
 
     @Override
     protected int getLayoutId() {
@@ -128,7 +129,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
                 }
                 mIsFileShow = false;
                 mHandler.removeMessages(BAD_NUM);
-                mHandler.removeMessages(GET_FILE_LIST);
+                //mHandler.removeMessages(GET_FILE_LIST);
                 mHandler.removeMessages(CHANGE_PAGE);
                 //获取工位信息
                 getPositionData();
@@ -144,7 +145,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
 
         mLlBottom = findViewById(R.id.llBottom);
         //初始化和FTP服务器交互的类
-        InitFTPServerSetting();
+        //InitFTPServerSetting();
         mListDialog = new ListDialog(mActivity) {
             @Override
             public void itemClick(View view, int position, final PositionBadInfoBean.DataBean dataBean) {
@@ -266,148 +267,92 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
     }
 
     public void getPdf() {
-
-        JSONObject jsonObject = new JSONObject();
-        try {
-            jsonObject.put("PositionIp", mIp);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-        HttpUtils.doPost(HttpUrl.GET_TERMINAL_FILE_LIST, jsonObject, new CallBack<TermialFileListBean>() {
-            @Override
-            public void onSuccess(final TermialFileListBean data) {
-                new Thread() {
-                    @Override
-                    public void run() {
-                        if (data != null && data.data != null && data.data.size() > 0) {
-                            for (int i = 0; i < data.data.size(); i++) {
-                                TermialFileListBean.DataBean dataBean = data.data.get(i);
-                                if (dataBean != null && !TextUtils.isEmpty(dataBean.FileIssuedPositionUrl)) {
-                                    String fileName = dataBean.FileIssuedPositionUrl;
-                                    if (fileName != null && fileName.contains("\\")) {
-                                        int index = fileName.lastIndexOf("\\");
-                                        if (index > 0) {
-                                            fileName = fileName.substring(index + 1, fileName.length());
-                                        }
-                                    }
-                                    String dealPath = dataBean.FileIssuedPositionUrl.replaceAll("\\\\", "/");
-                                    operateFile(dataBean, HttpUrl.FILE_SERVER_URL + dealPath, fileName);
-                                }
-                            }
-                        } else {
-                            showPdf();
-                        }
-
-                    }
-                }.start();
-
-            }
-
-            @Override
-            public void onFailed(Throwable e) {
-                mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
-            }
-        });
-    }
-
-    private void operateFile(final TermialFileListBean.DataBean dataBean, final String remotePath, final String fileName) {
-        System.out.println("dataBean.ClientIsDownload " + dataBean.ClientIsDownload + " dataBean.IsDeleted " + dataBean.IsDeleted);
-        if (dataBean.ClientIsDownload) {
-            if (dataBean.IsDeleted) {
-                //从缓存中删除
-                if (FileUtils.fileExist(mActivity, fileName)) {
-                    if (FileUtils.deletefile(mActivity, fileName)) {
-                        terminalPositionFileEdit(dataBean.PositionFileId);
+        if (mTerminalInfoBean != null) {
+            if (!TextUtils.isEmpty(mTerminalInfoBean.FileIssuedPositionUrl)) {
+                String fileName = mTerminalInfoBean.FileIssuedPositionUrl;
+                if (fileName != null && fileName.contains("\\")) {
+                    int index = fileName.lastIndexOf("\\");
+                    if (index > 0) {
+                        fileName = fileName.substring(index + 1, fileName.length());
                     }
                 }
-                mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
-            } else {
-                //重新下载到缓存
-                File dir = FileUtils.getCacheDir(mActivity);// 获取缓存所在的文件夹
-                File file = new File(dir, fileName);
-                System.out.println("mDisplayFile  " + mDisplayFile);
-                System.out.println("fileName  " + fileName);
-
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        mProgressBar.setVisibility(View.VISIBLE);
-                    }
-                });
-                // remotePath   "/AllFile"
-                ///storage/emulated/0/Android/data/com.pdf.workguide/cache/Dingan/JMeter相关的问题（整理）.docx
-
-                HttpUtils.getNovate().rxGet(remotePath, new HashMap<String, Object>(), new RxFileCallBack(dir.getPath(), fileName) {
-
-                    @Override
-                    public void onStart(Object tag) {
-                        super.onStart(tag);
-                    }
-
-                    @Override
-                    public void onNext(Object tag, File file) {
-                    }
-
-                    @Override
-                    public void onProgress(Object tag, float progress, long downloaded, long total) {
-                    }
-
-                    @Override
-                    public void onError(Object tag, Throwable e) {
-                        hideLoaddding();
-                        mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
-                    }
-
-                    @Override
-                    public void onCancel(Object tag, Throwable e) {
-
-                    }
-
-                    @Override
-                    public void onCompleted(Object tag) {
-                        super.onCompleted(tag);
-                        hideLoaddding();
-                        if (fileName != null && fileName.equals(mDisplayFile)) {
-                            showPdf();
-                        }
-                        terminalPositionFileEdit(dataBean.PositionFileId);
-                    }
-                });
+                String dealPath = mTerminalInfoBean.FileIssuedPositionUrl.replaceAll("\\\\", "/");
+                operateFile(HttpUrl.FILE_SERVER_URL + dealPath, fileName);
             }
+
+        }
+
+
+    }
+
+    private void operateFile(final String remotePath, final String fileName) {
+        File dir = FileUtils.getCacheDir(mActivity);// 获取缓存所在的文件夹
+        File file = new File(dir, fileName);
+        if (file != null && file.exists()) {
+            showPdf();
         } else {
-            mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
+            HttpUtils.getNovate().rxGet(remotePath, new HashMap<String, Object>(), new RxFileCallBack(dir.getPath(), fileName) {
+
+                @Override
+                public void onStart(Object tag) {
+                    super.onStart(tag);
+                    mProgressBar.setVisibility(View.VISIBLE);
+                }
+
+                @Override
+                public void onNext(Object tag, File file) {
+                }
+
+                @Override
+                public void onProgress(Object tag, float progress, long downloaded, long total) {
+                }
+
+                @Override
+                public void onError(Object tag, Throwable e) {
+                    hideLoaddding();
+                    //mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
+                }
+
+                @Override
+                public void onCancel(Object tag, Throwable e) {
+
+                }
+
+                @Override
+                public void onCompleted(Object tag) {
+                    super.onCompleted(tag);
+                    hideLoaddding();
+                    showPdf();
+                    //terminalPositionFileEdit(dataBean.PositionFileId);
+                }
+            });
         }
 
     }
 
     private void hideLoaddding() {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                mProgressBar.setVisibility(View.GONE);
-            }
-        });
+        mProgressBar.setVisibility(View.GONE);
     }
 
-    private void terminalPositionFileEdit(int positionFileId) {
-        JSONObject jsonObject = new JSONObject();
-        try {
-            jsonObject.put("PositionFileId", positionFileId);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-        HttpUtils.doPost(HttpUrl.TERMINAL_FILE_EDIT, jsonObject, new CallBack<BaseBean>() {
-            @Override
-            public void onSuccess(BaseBean data) {
-                mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
-            }
-
-            @Override
-            public void onFailed(Throwable e) {
-                mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
-            }
-        });
-    }
+//    private void terminalPositionFileEdit(int positionFileId) {
+//        JSONObject jsonObject = new JSONObject();
+//        try {
+//            jsonObject.put("PositionFileId", positionFileId);
+//        } catch (JSONException e) {
+//            e.printStackTrace();
+//        }
+//        HttpUtils.doPost(HttpUrl.TERMINAL_FILE_EDIT, jsonObject, new CallBack<BaseBean>() {
+//            @Override
+//            public void onSuccess(BaseBean data) {
+//                mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
+//            }
+//
+//            @Override
+//            public void onFailed(Throwable e) {
+//                mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
+//            }
+//        });
+//    }
 
     public void getPositionData() {
         if (getIntent() == null) return;
@@ -427,6 +372,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
                 mSmartRefreshLayout.finishRefresh();
                 if (data != null && data.data != null) {
                     if (data.data.terminalInfo != null) {
+                        mTerminalInfoBean = data.data.terminalInfo;
                         setRightData(data.data.terminalInfo);
                         mFilePlaybackTime = data.data.terminalInfo.FilePlaybackTime;
                         mDisplayFile = data.data.terminalInfo.FileName;
@@ -446,40 +392,35 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
     }
 
     private void showPdf() {
-        if (mIsFileShow) {
-            mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
-            return;
-        }
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                mProgressBar.setVisibility(View.GONE);
-                if (TextUtils.isEmpty(mDisplayFile)) return;
-                if (FileUtils.fileExist(mActivity, mDisplayFile)) {
-                    File dir = FileUtils.getCacheDir(mActivity);// 获取缓存所在的文件夹
-                    final File file = new File(dir, mDisplayFile);
-                    if (mDisplayFile.toLowerCase().endsWith(PDF)) {
-                        mShowFileWrapper.removeAllViews();
-                        mPDFView = new PDFView(mActivity, null);
-                        mShowFileWrapper.addView(mPDFView, new FrameLayout.LayoutParams(-1, -1));
-                        mPDFView.fromFile(file).onLoad(new OnLoadCompleteListener() {
-                            @Override
-                            public void loadComplete(int nbPages) {
-                                mIsFileShow = true;
-                                if (mFilePlaybackTime > 0) {
-                                    mHandler.sendEmptyMessageDelayed(CHANGE_PAGE, mFilePlaybackTime * 1000);
-                                }
-
-                            }
-                        }).load();
-                    } else {
-                        displayFile(file);
+//        if (mIsFileShow) {
+//            //mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
+//            return;
+//        }
+        mProgressBar.setVisibility(View.GONE);
+        if (TextUtils.isEmpty(mDisplayFile)) return;
+        if (FileUtils.fileExist(mActivity, mDisplayFile)) {
+            File dir = FileUtils.getCacheDir(mActivity);// 获取缓存所在的文件夹
+            final File file = new File(dir, mDisplayFile);
+            if (mDisplayFile.toLowerCase().endsWith(PDF)) {
+                mShowFileWrapper.removeAllViews();
+                mPDFView = new PDFView(mActivity, null);
+                mShowFileWrapper.addView(mPDFView, new FrameLayout.LayoutParams(-1, -1));
+                mPDFView.fromFile(file).onLoad(new OnLoadCompleteListener() {
+                    @Override
+                    public void loadComplete(int nbPages) {
+                        mIsFileShow = true;
+                        if (mFilePlaybackTime > 0) {
+                            mHandler.sendEmptyMessageDelayed(CHANGE_PAGE, mFilePlaybackTime * 1000);
+                        }
 
                     }
-                }
-                mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
+                }).load();
+            } else {
+                displayFile(file);
+
             }
-        });
+        }
+        // mHandler.sendEmptyMessageDelayed(GET_FILE_LIST, POST_DELAY);
 
     }
 
@@ -678,7 +619,7 @@ public class MainActivity extends BaseActivity implements TbsReaderView.ReaderCa
         super.onDestroy();
         //FtpUtils.getInstance().close();
         mHandler.removeMessages(BAD_NUM);
-        mHandler.removeMessages(GET_FILE_LIST);
+        //mHandler.removeMessages(GET_FILE_LIST);
         mHandler.removeMessages(CHANGE_PAGE);
         if (mTbsReaderView != null) {
             mTbsReaderView.onStop();
